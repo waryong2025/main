@@ -258,7 +258,7 @@
             if (!names || names.length === 0) return '';
             return names.map(item => {
                 const text = item.text.trim();
-                const display = text === '' ? 'X' : text;
+                const display = text === '' ? '.' : text;
                 const hiddenClass = text === '' ? ' hidden-x' : '';
                 return `<span class="name-entry${hiddenClass} ${item.bold ? 'bold-name' : ''}">${display}</span>`;
             }).join('');
