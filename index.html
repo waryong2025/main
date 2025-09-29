@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>종로 08번 근무현황표 생성기</title>
+    <title>와룡운수 종로 08번 근무현황표 </title>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 10px;
             background-color: #f4f4f4; color: #333;
-            font-size: 12pt;
+            font-size: 14pt;
         }
         .controls {
             background-color: #fff;
@@ -28,7 +28,7 @@
         .controls button, .controls a.button-link {
             padding: 8px 15px;
             color: white; border: none; border-radius: 4px;
-            cursor: pointer; font-size: 15px; margin-right: 8px;
+            cursor: pointer; font-size: 17.5px; margin-right: 8px;
             text-decoration: none; display: inline-block; text-align: center; white-space: nowrap;
         }
         .controls button { background-color: #007bff; }
@@ -53,11 +53,11 @@
             padding: 6px; text-align: center;
             vertical-align: top; line-height: 1.1; word-break: keep-all;
             height: 38px; box-sizing: border-box;
-            font-size: 12pt;
+            font-size: 14pt;
         }
         th { background-color: #f2f2f2; font-weight: bold; }
         caption {
-            font-size: 1.2em;
+            font-size: 1.5em;
             margin-bottom: 10px; font-weight: bold;
             color: #333; text-decoration: underline;
         }
@@ -139,6 +139,8 @@
             @page {
                 size: A4;
                 margin: 10mm;
+                margin-left: 15mm; /* A4 용지 인쇄 시 좌측 여백을 15mm로 설정 */
+                margin-right: 5mm;  /* A4 용지 인쇄 시 우측 여백을 5mm로 설정 */
             }
             body {
                 background-color: white;
@@ -150,7 +152,7 @@
             table {
                 width: 100%;
                 min-width: unset;
-                font-size: 0.7em;
+                font-size: 0.8em;
                 border: 1px solid #000;
                 table-layout: fixed;
             }
@@ -228,7 +230,7 @@
     </div>
 
     <script>
-        const VEHICLE_COLUMNS = ['3611호', '5510호', '3615호', '스피아', '3612호', '6201호', '5504호', '5535호', '5536호', '3614호', '비고'];
+        const VEHICLE_COLUMNS = ['3611', '5510', '3615', '스피아', '3612', '6201', '5504', '5535', '5536', '3614', '비고'];
 
         const STORAGE_KEY_FIXED = 'jongro08FixedSchedule';
         const STORAGE_KEY_TEMP = 'jongro08TempSchedule';
@@ -276,7 +278,7 @@
             const currentNames = (scheduleData[dateString] && scheduleData[dateString][colId]) || [{ text: '', bold: false }, { text: '', bold: false }];
             const morningValue = currentNames[0] ? currentNames[0].text : '';
             const afternoonValue = currentNames[1] ? currentNames[1].text : '';
-            const isSunday3614 = (colId === '3614호' && dayOfWeek === 0);
+            const isSunday3614 = (colId === '3614' && dayOfWeek === 0);
 
             cell.classList.add('edit-mode');
             cell.dataset.colId = colId;
@@ -330,7 +332,7 @@
             const { colId, dayOfWeek, dateString } = cellElement.dataset;
             const namesToSave = getNamesAndBoldStateFromCell(cellElement);
 
-            if (colId === '3614호' && dayOfWeek === '0') {
+            if (colId === '3614' && dayOfWeek === '0') {
                 alert('일요일은 휴무이므로 저장할 수 없습니다.');
                 return;
             }
@@ -349,7 +351,7 @@
             });
 
             // 3614호 근무 로테이션 추가
-            if (colId === '3614호' && dayOfWeek !== '0') { // 일요일 제외
+            if (colId === '3614' && dayOfWeek !== '0') { // 일요일 제외
                 const nextWeekDate = new Date(dateString);
                 nextWeekDate.setDate(nextWeekDate.getDate() + 7);
                 const nextWeekDateString = nextWeekDate.toISOString().slice(0, 10);
