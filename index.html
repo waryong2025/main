@@ -46,18 +46,18 @@
         table {
             width: 100%;
             min-width: 1200px; border-collapse: collapse;
-            margin: 0 auto; font-size: 0.85em; background-color: #fff; table-layout: fixed;
+            margin: 0 auto; font-size: 0.9em; background-color: #fff; table-layout: fixed;
         }
         th, td {
             border: 1px solid #ddd;
             padding: 6px; text-align: center;
-            vertical-align: top; line-height: 1; word-break: keep-all;
+            vertical-align: top; line-height: 1.1; word-break: keep-all;
             height: 38px; box-sizing: border-box;
             font-size: 13pt;
         }
         th { background-color: #f2f2f2; font-weight: bold; }
         caption {
-            font-size: 1.2em;
+            font-size: 1.5em;
             margin-bottom: 10px; font-weight: bold;
             color: #333; text-decoration: underline;
         }
@@ -333,6 +333,7 @@
         function saveFixedCell(cellElement) {
             const { colId, dayOfWeek, dateString } = cellElement.dataset;
             const namesToSave = getNamesAndBoldStateFromCell(cellElement);
+            const currentDate = new Date(dateString);
 
             if (colId === '3614' && dayOfWeek === '0') {
                 alert('일요일은 휴무이므로 저장할 수 없습니다.');
@@ -402,26 +403,22 @@
         
         function deleteCell(cellElement) {
             const { colId, dayOfWeek, dateString } = cellElement.dataset;
-            const recurringKey = `${dayOfWeek}-${colId}`;
 
-            // 고정 스케줄에서 삭제
-            if (fixedScheduleData[recurringKey]) {
-                fixedScheduleData[recurringKey] = fixedScheduleData[recurringKey].filter(
-                    entry => entry.dateString !== dateString
-                );
-                if (fixedScheduleData[recurringKey].length === 0) {
-                    delete fixedScheduleData[recurringKey];
-                }
-                localStorage.setItem(STORAGE_KEY_FIXED, JSON.stringify(fixedScheduleData));
-            }
-
-            // 임시 스케줄에서 삭제
-            if (tempScheduleData[dateString] && tempScheduleData[dateString][colId]) {
+            if (tempScheduleData[dateString]?.[colId]) {
                 delete tempScheduleData[dateString][colId];
                 if (Object.keys(tempScheduleData[dateString]).length === 0) {
                     delete tempScheduleData[dateString];
                 }
                 localStorage.setItem(STORAGE_KEY_TEMP, JSON.stringify(tempScheduleData));
+            }
+
+            const recurringKey = `${dayOfWeek}-${colId}`;
+            if (fixedScheduleData[recurringKey]) {
+                const blankNames = [{ text: '', bold: false }, { text: '', bold: false }];
+                fixedScheduleData[recurringKey] = fixedScheduleData[recurringKey].filter(entry => entry.dateString !== dateString);
+                fixedScheduleData[recurringKey].push({ dateString: dateString, names: blankNames });
+                fixedScheduleData[recurringKey].sort((a, b) => new Date(b.dateString) - new Date(a.dateString));
+                localStorage.setItem(STORAGE_KEY_FIXED, JSON.stringify(fixedScheduleData));
             }
             
             generateSchedule();
@@ -647,12 +644,37 @@
         }
 
         function printPage() {
-            document.querySelectorAll('.edit-mode').forEach(cell => {
-                const { colId, dateString } = cell.dataset;
-                const originalNames = (scheduleData[dateString] && scheduleData[dateString][colId]) || [{ text: '', bold: false }, { text: '', bold: false }];
-                cell.classList.remove('edit-mode');
-                cell.innerHTML = renderCellContent(originalNames);
-            });
+            const editCell = document.querySelector('.edit-mode');
+            if (editCell) {
+                const { colId, dateString } = editCell.dataset;
+                const originalNames = scheduleData[dateString]?.[colId] || [{ text: '', bold: false }, { text: '', bold: false }];
+                editCell.classList.remove('edit-mode');
+                editCell.innerHTML = renderCellContent(originalNames);
+            }
+
+            const originalTitle = document.title;
+            const captionText = document.getElementById('tableCaption').textContent;
+            // "종로 07번 2025년 10월 16일 ~ 31일까지 근무현황표" 에서 날짜 추출
+            const matches = captionText.match(/(\d{4})년 (\d{1,2})월 (\d{1,2})일 ~ (\d{1,2})일/);
+
+            let newTitle = "종로08번 근무현황표"; // 기본 파일명
+            if (matches) {
+                const year = matches[1];
+                const month = matches[2].padStart(2, '0');
+                const startDay = matches[3].padStart(2, '0');
+                const endDay = matches[4].padStart(2, '0');
+                newTitle = `종로08번 ${year}-${month} (${startDay}일-${endDay}일)`;
+            }
+
+            // 인쇄 후 제목을 원래대로 되돌리는 이벤트 핸들러
+            const handleAfterPrint = () => {
+                document.title = originalTitle;
+                window.removeEventListener('afterprint', handleAfterPrint);
+            };
+            window.addEventListener('afterprint', handleAfterPrint);
+
+            // 인쇄 직전에 제목 변경
+            document.title = newTitle;
             window.print();
         }
 
