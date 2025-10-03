@@ -330,21 +330,24 @@
             }
         }
 
+        /**
+         * 3614 차량의 7일 로테이션 로직을 수정한 함수
+         */
         function saveFixedCell(cellElement) {
             const { colId, dayOfWeek, dateString } = cellElement.dataset;
             const namesToSave = getNamesAndBoldStateFromCell(cellElement);
-            const currentDate = new Date(dateString);
 
             if (colId === '3614' && dayOfWeek === '0') {
-                alert('일요일은 휴무이므로 저장할 수 없습니다.');
+                alert('3614호는 일요일 고정 저장이 불가능합니다.');
                 return;
             }
             
-            // 현재 날짜 고정 저장
+            // 1. 현재 날짜 고정 저장
             const currentRecurringKey = `${dayOfWeek}-${colId}`;
             if (!fixedScheduleData[currentRecurringKey]) {
                 fixedScheduleData[currentRecurringKey] = [];
             }
+            // 기존의 해당 날짜 항목을 삭제 (덮어쓰기)
             fixedScheduleData[currentRecurringKey] = fixedScheduleData[currentRecurringKey].filter(
                 entry => entry.dateString !== dateString
             );
@@ -353,25 +356,37 @@
                 names: namesToSave
             });
 
-            // 3614호 근무 로테이션 추가
-            if (colId === '3614' && dayOfWeek !== '0') { // 일요일 제외
-                const nextWeekDate = new Date(dateString);
-                nextWeekDate.setDate(nextWeekDate.getDate() + 7);
-                const nextWeekDateString = nextWeekDate.toISOString().slice(0, 10);
-                const nextWeekDayOfWeek = nextWeekDate.getDay();
 
+            // 2. 3614호 근무 로테이션 추가 (정확히 7일 후 로테이션 적용)
+            if (colId === '3614' && dayOfWeek !== '0') { // 일요일 제외
+                
+                // 로테이션된 근무자: [오후 근무자, 오전 근무자]
                 const rotatedNames = [
                     namesToSave[1], // 오후 근무자가 다음 주 오전 근무자로
                     namesToSave[0]  // 오전 근무자가 다음 주 오후 근무자로
                 ];
 
-                const nextWeekRecurringKey = `${nextWeekDayOfWeek}-${colId}`;
+                // 현재 날짜에서 7일 후 날짜 계산
+                const currentDate = new Date(dateString);
+                // setDate는 월 경계를 자동으로 처리합니다.
+                currentDate.setDate(currentDate.getDate() + 7); 
+                const nextWeekDateString = currentDate.toISOString().slice(0, 10);
+                
+                // 다음 주의 recurringKey는 동일함 (같은 요일이므로)
+                const nextWeekRecurringKey = currentRecurringKey; 
+
+                // 다음 주 같은 요일의 근무표를 고정 저장
                 if (!fixedScheduleData[nextWeekRecurringKey]) {
                     fixedScheduleData[nextWeekRecurringKey] = [];
                 }
+                
+                // 다음 주 같은 요일의 기존 항목을 삭제 (덮어쓰기)
                 fixedScheduleData[nextWeekRecurringKey] = fixedScheduleData[nextWeekRecurringKey].filter(
                     entry => entry.dateString !== nextWeekDateString
                 );
+
+                // 로테이션된 근무자를 다음 주 날짜로 고정 저장.
+                // 이 엔트리는 다음 주 해당 날짜부터 "최신" 고정 데이터가 되어 로테이션이 적용됩니다.
                 fixedScheduleData[nextWeekRecurringKey].push({
                     dateString: nextWeekDateString,
                     names: rotatedNames
@@ -379,7 +394,8 @@
             }
 
 
-            // 가장 최근 날짜 순으로 정렬
+            // 3. 가장 최근 날짜 순으로 정렬 (데이터 조회 시 최신 날짜 우선 적용)
+            // 이를 통해 saveFixedCell을 호출한 날짜 이후에 저장된 로테이션 일정이 자동으로 적용됩니다.
             for (const key in fixedScheduleData) {
                 fixedScheduleData[key].sort((a, b) => new Date(b.dateString) - new Date(a.dateString));
             }
@@ -404,6 +420,7 @@
         function deleteCell(cellElement) {
             const { colId, dayOfWeek, dateString } = cellElement.dataset;
 
+            // 1. 임시 근무표 삭제
             if (tempScheduleData[dateString]?.[colId]) {
                 delete tempScheduleData[dateString][colId];
                 if (Object.keys(tempScheduleData[dateString]).length === 0) {
@@ -412,11 +429,18 @@
                 localStorage.setItem(STORAGE_KEY_TEMP, JSON.stringify(tempScheduleData));
             }
 
+            // 2. 고정 근무표 삭제 (빈칸으로 덮어쓰기)
             const recurringKey = `${dayOfWeek}-${colId}`;
             if (fixedScheduleData[recurringKey]) {
                 const blankNames = [{ text: '', bold: false }, { text: '', bold: false }];
+                
+                // 기존의 해당 날짜 항목을 삭제 (새 빈칸 항목을 추가하여 덮어쓰기 위함)
                 fixedScheduleData[recurringKey] = fixedScheduleData[recurringKey].filter(entry => entry.dateString !== dateString);
+                
+                // 빈칸 항목을 고정으로 저장
                 fixedScheduleData[recurringKey].push({ dateString: dateString, names: blankNames });
+                
+                // 정렬 및 저장
                 fixedScheduleData[recurringKey].sort((a, b) => new Date(b.dateString) - new Date(a.dateString));
                 localStorage.setItem(STORAGE_KEY_FIXED, JSON.stringify(fixedScheduleData));
             }
@@ -469,13 +493,17 @@
                 VEHICLE_COLUMNS.forEach(colId => {
                     let appliedNames = [{ text: '', bold: false }, { text: '', bold: false }];
 
+                    // 1. 임시 근무표 확인 (최우선 적용)
                     if (tempScheduleData[dateString] && tempScheduleData[dateString][colId]) {
                         appliedNames = tempScheduleData[dateString][colId];
                     }
+                    // 2. 고정 근무표 확인
                     else {
                         const recurringKey = `${dayOfWeek}-${colId}`;
                         if (fixedScheduleData[recurringKey]) {
+                            // 날짜 기준으로 가장 최근에 저장된 고정 데이터를 찾음
                             for (const entry of fixedScheduleData[recurringKey]) {
+                                // 현재 보고 있는 날짜(dateString)가 고정 데이터의 기준 날짜(entry.dateString)와 같거나 그 이후여야 적용됩니다.
                                 if (new Date(dateString) >= new Date(entry.dateString)) {
                                     appliedNames = entry.names;
                                     break;
