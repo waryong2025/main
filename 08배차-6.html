@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>요일별 차량 배정표 - 고급 제약 조건</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f3f4f6;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      width: 100%;
+      max-width: 800px;
+    }
+    #printableArea {
+      background-color: white;
+      padding: 2rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1.5rem;
+      background-color: white;
+    }
+    th, td {
+      padding: 0.75rem;
+      border: 1px solid #e5e7eb;
+      text-align: center;
+      font-size: 0.875rem;
+    }
+    th {
+      background-color: #f9fafb;
+      color: #374151;
+      font-weight: 600;
+    }
+    td {
+      color: #1d4ed8;
+      font-weight: 500;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      text-align: center;
+      color: #1f2937;
+    }
+    h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      text-align: center;
+      color: #4b5563;
+      margin-bottom: 1.5rem;
+    }
+    .notes {
+      margin-top: 2rem;
+      padding: 1rem;
+      background-color: #f9fafb;
+      border-radius: 0.375rem;
+      font-size: 0.875rem;
+      color: #4b5563;
+    }
+    .notes p {
+      margin-bottom: 0.5rem;
+    }
+    .button-group {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin: 1.5rem auto 0;
+    }
+    /* 모든 버튼 스타일 통일: 파란색 배경, 흰색 글자 */
+    button, .home-button {
+      background-color: #2563eb; /* 통일된 파란색 배경 */
+      color: white; /* 흰색 글자 */
+      font-weight: 600;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.375rem;
+      cursor: pointer;
+      border: none;
+      transition: background-color 0.3s;
+      text-align: center;
+      text-decoration: none; /* 링크 버튼에 필요 */
+      display: inline-block;
+    }
+    button:hover, .home-button:hover {
+      background-color: #1d4ed8; /* 호버 시 약간 어두운 파란색 */
+    }
+    
+    /* 홈 버튼 전용 스타일 */
+    #homeButton {
+        display: block;
+        width: 100%;
+        max-width: 800px;
+        margin-bottom: 1rem;
+        font-size: 1.25rem; /* 조금 큰 글자 크기 */
+    }
+
+    .overflow-container {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    /* -------------------------------------- */
+    /* 인쇄 전용 스타일 (A4에 꽉 차게 조정) */
+    /* -------------------------------------- */
+    @media print {
+      body {
+        background-color: white !important;
+        margin: 0;
+        padding: 0;
+        min-height: initial;
+        display: block;
+      }
+      .container {
+        max-width: none;
+        width: 100%;
+      }
+      #printableArea {
+        box-shadow: none !important;
+        border-radius: 0;
+        padding: 0.5cm;
+      }
+      .button-group, .notes, .home-button-wrapper {
+        display: none !important; /* 홈 버튼 포함 모든 버튼 숨김 */
+      }
+
+      /* 글꼴 및 테이블 크기 조정 */
+      h1 { font-size: 20pt; }
+      h2 { font-size: 14pt; }
+      table {
+        margin-top: 1rem;
+        width: 100%; 
+        table-layout: fixed; 
+      }
+      th, td {
+        padding: 0.5rem;
+        font-size: 10pt; 
+        border: 1px solid black;
+      }
+      td {
+          color: #1f2937;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="home-button-wrapper">
+    <a href="https://waryong2025.github.io/main/" target="_blank" id="homeButton" class="home-button">
+      🏠 홈으로 돌아가기 
+    </a>
+  </div>
+  
+  <div class="container">
+    <div id="printableArea">
+      <h1 id="main-title">배차표</h1>
+      <h2 id="sub-title">(종로08번)</h2>
+      <div class="overflow-container">
+        <table id="assignmentTable"></table>
+      </div>
+      <div class="notes">
+        <p><strong>주의)</strong> 오후 운행차량은 2시00분부터 운행하시길 부탁드립니다.</p>
+        <p>차량 3614호는 근무자 근태확인 후 마지막 차량으로 배차가 들어갑니다.</p>
+        <p>5월 1일부터는 첫차 06:00 막차 23:20입니다. <strong> ( By InJoongOh )  </strong></p>
+      </div>
+    </div>
+    <div class="button-group">
+      <button id="regenerateButton">다시 배정</button> 
+      <button id="printButton">인쇄</button>
+      <button id="docxButton">DOCX로 저장</button>
+    </div>
+  </div>
+
+  <script>
+    const days = ["월", "화", "수", "목", "금", "토", "일"];
+    const carAssignmentsData = [
+      { id: 1, label: "1", numbers: [5504, 5535, 6201, 3611, 3615, 5510] },
+      { id: 2, label: "2", numbers: [5510, 5504, 3615, 6201, 3611, 5535] },
+      { id: 3, label: "3", numbers: [6201, 3611, 5504, 5510, 5535, 3615] },
+      { id: 4, label: "4", numbers: [3611, 6201, 5535, 3615, 5510, 5504] },
+      { id: 5, label: "5", numbers: [3615, 5510, 3611, 5504, 6201, 5535] },
+      { id: 6, label: "6", numbers: [5535, 3615, 5510, 6201, 3611, 5504] },
+      { id: 7, label: "7", numbers: [3614, 3614, 3614, 3614, 3614, 3614, 3614], isFixed: true }
+    ];
+
+    const assignmentTable = document.getElementById("assignmentTable");
+    const regenerateButton = document.getElementById("regenerateButton");
+    const printButton = document.getElementById("printButton");
+    const docxButton = document.getElementById("docxButton");
+    const mainTitleElement = document.getElementById("main-title");
+    const subTitleElement = document.getElementById("sub-title");
+
+    let currentAssignments = []; 
+
+    /**
+     * 현재 년/월 정보를 객체로 반환합니다.
+     */
+    function getCurrentYearMonth() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        return { year, month };
+    }
+
+    /**
+     * 부제 텍스트를 현재 년월로 업데이트합니다.
+     */
+    function updateSubtitle() {
+        const { year, month } = getCurrentYearMonth();
+        // 부제 포맷을 "(YYYY년 MM월 종로08번)" 형식으로 업데이트
+        subTitleElement.textContent = `(${year}년 ${month}월 종로08번)`;
+    }
+
+    // 배열을 무작위로 섞는 함수 (Fisher-Yates shuffle)
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    // 차량 배정 로직 (기존 로직 유지)
+    function generateValidAssignments() {
+      const MAX_ATTEMPTS = 50000;
+      const nonFixedCarRows = carAssignmentsData.slice(0, 6);
+      const fixedCarNumber = 3614;
+      
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        const resultGrid = Array(carAssignmentsData.length).fill(null).map(() => Array(days.length).fill(null));
+        let isSuccess = true;
+
+        // 1. 고정된 7번째 차량 먼저 배정 (3614)
+        for (let dayIndex = 0; dayIndex < days.length; dayIndex++) {
+          resultGrid[6][dayIndex] = fixedCarNumber;
+        }
+
+        const availableNumbersPools = nonFixedCarRows.map(carData => {
+            const uniqueNums = Array.from(new Set(carData.numbers));
+            return uniqueNums;
+        });
+
+        // 2. 나머지 차량들 (ID 1~6) 배정
+        for (let dayIndex = 0; dayIndex < days.length; dayIndex++) {
+            const usedNumbersInColumnForThisDay = new Set();
+            usedNumbersInColumnForThisDay.add(fixedCarNumber); 
+
+            for (let carIndex = 0; carIndex < nonFixedCarRows.length; carIndex++) {
+                let assigned = false;
+                const shuffledAvailableNums = shuffleArray([...availableNumbersPools[carIndex]]);
+
+                const currentRowCounts = {};
+                for(let prevDay = 0; prevDay < dayIndex; prevDay++) {
+                    const num = resultGrid[carIndex][prevDay];
+                    if (num !== null) currentRowCounts[num] = (currentRowCounts[num] || 0) + 1;
+                }
+
+                for (const carNum of shuffledAvailableNums) {
+                    if (usedNumbersInColumnForThisDay.has(carNum)) {
+                        continue;
+                    }
+
+                    if ((currentRowCounts[carNum] || 0) >= 2) {
+                        continue;
+                    }
+
+                    if (dayIndex > 0 && resultGrid[carIndex][dayIndex - 1] === carNum) {
+                        continue;
+                    }
+
+                    resultGrid[carIndex][dayIndex] = carNum;
+                    usedNumbersInColumnForThisDay.add(carNum);
+                    assigned = true;
+                    break;
+                }
+                if (!assigned) {
+                    isSuccess = false;
+                    break;
+                }
+            }
+            if (!isSuccess) break;
+        }
+        if (!isSuccess) continue; 
+
+        // 3. 최종 검증 (생략된 세부 검증 로직은 원본에 따라 유지)
+        for (let carIndex = 0; carIndex < nonFixedCarRows.length; carIndex++) {
+          const rowNumbers = resultGrid[carIndex];
+          const counts = {};
+          for (let i = 0; i < rowNumbers.length; i++) {
+            const num = rowNumbers[i];
+            counts[num] = (counts[num] || 0) + 1;
+            if (i > 0 && rowNumbers[i] === rowNumbers[i-1]) {
+                isSuccess = false;
+                break;
+            }
+          }
+          if (!isSuccess) break;
+          for (const num in counts) {
+            if (counts[num] > 2) {
+              isSuccess = false;
+              break;
+            }
+          }
+          if (!isSuccess) break;
+        }
+        if (!isSuccess) continue; 
+
+        for (let dayIndex = 0; dayIndex < days.length; dayIndex++) {
+          const columnNumbers = [];
+          for (let carIdx = 0; carIdx < carAssignmentsData.length; carIdx++) {
+            columnNumbers.push(resultGrid[carIdx][dayIndex]);
+          }
+          const counts = {};
+          for (const num of columnNumbers) {
+            counts[num] = (counts[num] || 0) + 1;
+          }
+
+          for (const num in counts) {
+            if (num == fixedCarNumber) {
+              if (counts[num] > 2) {
+                isSuccess = false;
+                break;
+              }
+            } else {
+              if (counts[num] > 1) {
+                isSuccess = false;
+                break;
+              }
+            }
+          }
+          if (!isSuccess) break;
+        }
+        if (!isSuccess) continue; 
+
+        return resultGrid;
+      }
+      console.warn("최대 시도 횟수를 초과했습니다. 유효한 배정표를 찾지 못했습니다.");
+      return null;
+    }
+
+    // 테이블 렌더링 함수
+    function renderTable(assignments) {
+      assignmentTable.innerHTML = ""; // 기존 내용 비우기
+
+      if (!assignments) {
+        assignmentTable.innerHTML = "<tr><td colspan='8' style='color: red; font-weight: bold; padding: 20px;'>배정표를 생성할 수 없습니다. 다시 시도하거나, 제약 조건이 너무 강한지 확인해주세요.</td></tr>";
+        return;
+      }
+
+      // 헤더 행 생성 (요일)
+      const headerRow = assignmentTable.insertRow();
+      const emptyTh = document.createElement("th");
+      emptyTh.textContent = "ID"; // 첫 번째 빈 칸
+      headerRow.appendChild(emptyTh);
+      days.forEach(day => {
+        const th = document.createElement("th");
+        th.textContent = day;
+        headerRow.appendChild(th);
+      });
+
+      // 데이터 행 생성
+      assignments.forEach((carDayAssignments, carIndex) => {
+        const row = assignmentTable.insertRow();
+        const idCell = row.insertCell();
+        idCell.textContent = carAssignmentsData[carIndex].label; // ID 또는 라벨
+
+        carDayAssignments.forEach(assignment => {
+          const cell = row.insertCell();
+          cell.textContent = assignment;
+        });
+      });
+    }
+
+    // DOCX 저장 함수 (A4 안정화 및 사용자 지정 스타일 적용)
+    function exportTableToDocx(tableId) {
+        const table = document.getElementById(tableId);
+        const subTitleText = subTitleElement.textContent; // 현재 화면의 부제 가져오기
+        
+        // Word에서 잘 열리는 HTML 형식으로 저장 (.doc 확장자로)
+        const content = `
+            <!DOCTYPE html>
+            <html lang="ko">
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    /* A4 안정화 조정 및 사용자 지정 스타일 */
+                    body { font-family: 'Malgun Gothic', 'Dotum', sans-serif; padding: 15px; }
+                    h1 { font-size: 20pt; text-align: center; margin-bottom: 5pt; }
+                    h2 { font-size: 14pt; text-align: center; margin-bottom: 15pt; }
+                    table { 
+                        border-collapse: collapse; 
+                        width: 90%; /* 넓이 90% 축소 */
+                        table-layout: fixed; 
+                        margin: 15px auto; /* 중앙 정렬 */
+                    }
+                    /* 헤더(요일)와 첫 번째 열(ID) 스타일: 굵게, 14pt, 굵은 선 */
+                    th {
+                        border: 2px solid black; /* 굵은 선 */
+                        padding: 6px; /* 높이 축소 (기존 0.75rem 약 12px -> 6px) */
+                        text-align: center; 
+                        font-size: 14pt; /* 14pt */
+                        font-weight: bold; /* 굵은 글자 */
+                        background-color: #f0f0f0; 
+                    }
+                    /* 데이터 셀 스타일: 차량 번호 12pt, 굵은 선 */
+                    td { 
+                        border: 2px solid black; /* 굵은 선 */
+                        padding: 6px; /* 높이 축소 */
+                        text-align: center; 
+                        font-size: 12pt; /* 12pt */
+                        color: #1f2937;
+                    }
+                    /* ID 셀 (첫 번째 열)만 14pt, 굵게 */
+                    table tr td:first-child { 
+                        font-size: 14pt; 
+                        font-weight: bold;
+                    }
+
+                    p { font-size: 10pt; } /* 주석 글자 크기 조정 */
+                </style>
+            </head>
+            <body>
+                <h1>${mainTitleElement.textContent}</h1>
+                <h2>${subTitleText}</h2> ${table.outerHTML}
+                <p style="margin-top: 30px;"><strong>주의)</strong> 오후 운행차량은 2시00분부터 운행하시길 부탁드립니다.</p>
+                <p>차량 3614호는 근무자 근태확인 후 마지막 차량으로 배차가 들어갑니다.</p>
+                <p>5월 1일부터는 첫차 06:00 막차 23:20입니다. <strong> ( By InJoongOh )  </strong></p>
+            </body>
+            </html>
+        `;
+
+        const blob = new Blob([content], {
+            type: 'application/msword;charset=utf-8'
+        });
+
+        // 날짜와 시간을 포함한 파일명 생성
+        const now = new Date();
+        const y = String(now.getFullYear());
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        const h = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        const s = String(now.getSeconds()).padStart(2, '0');
+        const docxFilename = `차량 배정표_${y}${m}${d}_${h}${min}${s}.doc`;
+
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = docxFilename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // 초기 로드 및 버튼 이벤트
+    regenerateButton.addEventListener("click", () => {
+      currentAssignments = generateValidAssignments();
+      renderTable(currentAssignments);
+    });
+
+    printButton.addEventListener("click", () => {
+      window.print(); // 브라우저 인쇄 기능 호출
+    });
+
+    docxButton.addEventListener("click", () => {
+      exportTableToDocx('assignmentTable');
+    });
+
+    // 페이지 로드 시 초기 배정표 생성 및 타이틀 업데이트
+    document.addEventListener("DOMContentLoaded", () => {
+      updateSubtitle(); // 페이지 로드 시 현재 년월이 포함된 부제 업데이트
+      currentAssignments = generateValidAssignments();
+      renderTable(currentAssignments);
+    });
+  </script>
+</body>
+</html>
