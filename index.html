@@ -429,6 +429,10 @@
 
         /**
          * 로컬스토리지의 근무 데이터를 JSON 파일로 다운로드하는 함수 (키값 포함)
+         * 수정 내용:
+         * 1. JSON.stringify(data)로 변경하여 공백을 제거하고 데이터를 압축했습니다.
+         * 2. 파일 확장자를 .txt에서 .json으로 변경했습니다.
+         * 3. Blob 타입을 'application/json'으로 변경했습니다.
          */
         function backupScheduleData() {
             const fixedData = localStorage.getItem(STORAGE_KEY_FIXED);
@@ -439,10 +443,10 @@
                 [STORAGE_KEY_TEMP]: tempData ? JSON.parse(tempData) : {}
             };
             
-            // JSON.stringify로 데이터를 보기 좋게 포맷팅 (들여쓰기 4칸)
-            const jsonString = JSON.stringify(backupData, null, 4);
+            // JSON.stringify로 데이터를 압축하여 포맷팅을 제거 (공백 제거)
+            const jsonString = JSON.stringify(backupData); // null, 4 인자 제거
 
-            // 파일명에 현재 시각을 포함하여 저장
+            // 파일명에 현재 시각을 포함하여 저장 (확장자를 .json으로 변경)
             const now = new Date();
             const year = now.getFullYear();
             const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -451,11 +455,11 @@
             const minutes = String(now.getMinutes()).padStart(2, '0');
             const seconds = String(now.getSeconds()).padStart(2, '0');
 
-            // 요청에 따라 키값(로컬스토리지 키)을 포함한 파일명 구조: jongro08_backup_20251006_193642.txt
-            const filename = `jongro08_backup_${year}${month}${day}_${hours}${minutes}${seconds}.txt`;
+            // 요청에 따라 키값(로컬스토리지 키)을 포함한 파일명 구조: jongro08_backup_20251006_193642.json
+            const filename = `jongro08_backup_${year}${month}${day}_${hours}${minutes}${seconds}.json`; // .json으로 변경
 
-            // Blob 객체를 생성하여 데이터를 파일 형태로 만듦 (텍스트 파일)
-            const blob = new Blob([jsonString], { type: 'text/plain;charset=utf-8' });
+            // Blob 객체를 생성하여 데이터를 파일 형태로 만듦 (JSON 파일 형식으로 변경)
+            const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' }); // type 변경
 
             // 다운로드 링크 생성 및 자동 클릭
             const a = document.createElement('a');
