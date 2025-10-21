@@ -92,7 +92,23 @@
         .controls button.btn-danger { background-color: #dc3545; }
         .controls button.btn-danger:hover { background-color: #c82333; }
 
-        /* 기존의 백업 버튼 스타일은 이제 action-select에 통합되어 사용되지 않습니다. */
+        /* 바탕색 제거 및 요일 이름 글자 크기/색상 설정 */
+        /* ✅ sunday, saturday, holiday 클래스의 background-color 제거 */
+        .sunday { /* background-color: #ffe0e0; */ }
+        .saturday { /* background-color: #e0e0ff; */ }
+        .holiday { /* background-color: #ffcccc; */ font-weight: bold; color: #333; } /* 기본 글자색 유지 */
+
+        /* ✅ 요일 아래에 표시될 두 글자 줄임말 스타일 (1/2 글자 크기, 색상 적용) */
+        .special-day-abbr {
+            display: block; /* 다음 줄로 내림 */
+            font-size: 0.5em; /* 1/2 크기 */
+            line-height: 1;
+            font-weight: bold;
+        }
+        .sunday .special-day-abbr { color: #cc0000; } /* 일요일: 빨간색 */
+        .saturday .special-day-abbr { color: #0000cc; } /* 토요일: 파란색 */
+        .holiday .special-day-abbr { color: #cc0000; } /* 공휴일: 빨간색 */
+
 
         #scheduleContainer {
             background-color: white;
@@ -117,9 +133,7 @@
             margin-bottom: 10px; font-weight: bold;
             color: #333; text-decoration: underline;
         }
-        .sunday { background-color: #ffe0e0; }
-        .saturday { background-color: #e0e0ff; }
-        .holiday { background-color: #ffcccc; font-weight: bold; color: #cc0000; }
+        
         .edit-mode {
             position: relative;
             padding: 2px; display: flex; flex-direction: column;
@@ -320,12 +334,31 @@
             return days[dayOfWeek];
         }
 
+        /**
+         * ✅ 법정휴일/대체휴일 확인 함수 수정: 휴일 이름을 반환하거나 null을 반환
+         * @param {Date} date - 확인할 날짜 객체
+         * @returns {string | null} 휴일 이름(예: '한글날') 또는 휴일이 아니면 null
+         */
         function isPublicHoliday(date) {
-            const year = date.getFullYear();
             const month = date.getMonth() + 1;
             const day = date.getDate();
-            const holidays = [];
-            return holidays.some(h => h.month === month && h.day === day);
+            // ✅ 법정휴일/대체휴일 테스트를 위한 예시 데이터 (실제 데이터는 DB나 API로 관리해야 함)
+            const holidays = [
+                { month: 10, day: 9, name: '한글날' },
+                { month: 9, day: 18, name: '추석연휴' } // 예시 대체휴일
+            ];
+            const holidayEntry = holidays.find(h => h.month === month && h.day === day);
+            return holidayEntry ? holidayEntry.name : null;
+        }
+        
+        /**
+         * ✅ 이름의 첫 두 글자만 추출 (예: 토요일 -> 토요, 한글날 -> 한글)
+         * @param {string} fullName - 전체 이름
+         * @returns {string} 첫 두 글자
+         */
+        function getAbbreviation(fullName) {
+            if (!fullName) return '';
+            return fullName.slice(0, 2);
         }
 
         function renderCellContent(names) {
@@ -678,6 +711,34 @@
             for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
                 const dateString = d.toISOString().slice(0, 10);
                 const dayOfWeek = d.getDay(); // 0:일, 1:월, ..., 6:토
+                
+                // 1. Determine classification and special name
+                const holidayName = isPublicHoliday(d); // Returns name or null
+
+                let rowClass = '';
+                let specialFullName = null; // 요일 아래 표시할 전체 이름 (예: 토요일, 한글날)
+
+                if (holidayName) {
+                    rowClass = 'holiday';
+                    specialFullName = holidayName;
+                } else if (dayOfWeek === 0) {
+                    rowClass = 'sunday';
+                    specialFullName = '일요일';
+                } else if (dayOfWeek === 6) {
+                    rowClass = 'saturday';
+                    specialFullName = '토요일';
+                }
+
+                // 2. Build the day/name cell content
+                const dayNameHtml = getDayName(dayOfWeek); // 원래 요일 이름 (월, 화, 수...)
+                let specialNameHtml = '';
+
+                if (specialFullName) {
+                    const abbr = getAbbreviation(specialFullName);
+                    // ✅ 1/2 글자 크기, 색상이 적용되는 줄임말 span 생성
+                    specialNameHtml = `<span class="special-day-abbr">${abbr}</span>`;
+                }
+
 
                 let cellsContent = {};
                 VEHICLE_COLUMNS.forEach(colId => {
@@ -705,19 +766,13 @@
                 });
                 scheduleData[dateString] = cellsContent;
 
-                let rowClass = isPublicHoliday(d) ? 'holiday' : '';
-                if (!rowClass) {
-                    if (dayOfWeek === 0) rowClass = 'sunday';
-                    else if (dayOfWeek === 6) rowClass = 'saturday';
-                }
-
                 const dataCellsHTML = VEHICLE_COLUMNS.map(colId =>
                     `<td onclick="editCell(this, '${colId}', '${dateString}', ${dayOfWeek})">${renderCellContent(cellsContent[colId])}</td>`
                 ).join('');
                 scheduleBody.insertAdjacentHTML('beforeend', `
                     <tr class="${rowClass}">
                         <td>${d.getDate()}</td>
-                        <td>${getDayName(dayOfWeek)}</td>
+                        <td>${dayNameHtml}${specialNameHtml}</td>
                         ${dataCellsHTML}
                     </tr>`);
             }
