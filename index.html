@@ -435,7 +435,7 @@
         }
 
         /**
-         * ✅ 고정 저장 로직 수정 (격주 근무 로직 일반화)
+         * ✅ [수정됨] 고정 저장 로직 (격주 근무 7일 뒤 저장 로직 제거)
          */
         function saveFixedCell(cellElement) {
             const { colId, dayOfWeek, dateString } = cellElement.dataset;
@@ -463,41 +463,14 @@
             });
 
 
-            // 3. 격주 근무 (biweekly) 로테이션 추가 (일요일 제외)
+            // 3. [수정] 격주 근무 (biweekly) 로테이션 자동 저장 로직 삭제
+            // 이 로직은 generateSchedule() 함수에서 실시간으로 계산하도록 변경되었습니다.
+            /*
             if (workType === 'biweekly' && dayOfWeek !== '0') {
-                // 로테이션된 근무자: [오후 근무자, 오전 근무자]
-                const rotatedNames = [
-                    namesToSave[1], // 오후 근무자가 다음 주 오전 근무자로
-                    namesToSave[0]  // 오전 근무자가 다음 주 오후 근무자로
-                ];
-
-                // 현재 날짜에서 7일 후 날짜 계산
-                const currentDate = new Date(dateString);
-                currentDate.setDate(currentDate.getDate() + 7);
-                const nextWeekDateString = currentDate.toISOString().slice(0, 10);
-
-                // 다음 주의 recurringKey는 동일함 (같은 요일이므로)
-                const nextWeekRecurringKey = currentRecurringKey;
-
-                // 다음 주 같은 요일의 근무표를 고정 저장
-                if (!fixedScheduleData[nextWeekRecurringKey]) {
-                    fixedScheduleData[nextWeekRecurringKey] = [];
-                }
-
-                // 다음 주 같은 요일의 기존 항목을 삭제 (덮어쓰기)
-                fixedScheduleData[nextWeekRecurringKey] = fixedScheduleData[nextWeekRecurringKey].filter(
-                    entry => entry.dateString !== nextWeekDateString
-                );
-
-                // 로테이션된 근무자를 다음 주 날짜로 고정 저장.
-                fixedScheduleData[nextWeekRecurringKey].push({
-                    dateString: nextWeekDateString,
-                    names: rotatedNames
-                });
+                // ... 이 안에 있던 7일 뒤 저장 로직 전체 삭제 ...
             }
-            // 'normal' (3/3 근무)의 경우 7일 후 로테이션은 적용하지 않음.
-
-
+            */
+            
             // 4. 가장 최근 날짜 순으로 정렬 (데이터 조회 시 최신 날짜 우선 적용)
             for (const key in fixedScheduleData) {
                 fixedScheduleData[key].sort((a, b) => new Date(b.dateString) - new Date(a.dateString));
@@ -689,6 +662,9 @@
         }
         // ----------------------------------------------------------------
 
+        /**
+         * ✅ [수정됨] 근무표 생성 로직 (실시간 격주 근무 계산)
+         */
         function generateSchedule() {
             const year = parseInt(document.getElementById('yearInput').value);
             const month = parseInt(document.getElementById('monthInput').value);
@@ -752,14 +728,56 @@
                     else {
                         const recurringKey = `${dayOfWeek}-${colId}`;
                         if (fixedScheduleData[recurringKey]) {
-                            // 날짜 기준으로 가장 최근에 저장된 고정 데이터를 찾음
+                            
+                            // [수정 시작] -----------------------------------------------
+                            
+                            // 날짜 기준으로 가장 최근에 저장된 고정 데이터를 찾음 (이것이 "기준 날짜"가 됨)
+                            let anchorEntry = null;
                             for (const entry of fixedScheduleData[recurringKey]) {
                                 // 현재 보고 있는 날짜(dateString)가 고정 데이터의 기준 날짜(entry.dateString)와 같거나 그 이후여야 적용됩니다.
                                 if (new Date(dateString) >= new Date(entry.dateString)) {
-                                    appliedNames = entry.names;
+                                    anchorEntry = entry;
                                     break;
                                 }
                             }
+
+                            // 기준 날짜를 찾았을 경우
+                            if (anchorEntry) {
+                                const workType = workTypeConfig[colId] || 'normal';
+                                
+                                // "격주 근무" 이고 "일요일이 아닌" 경우에만 로테이션 계산
+                                if (workType === 'biweekly' && dayOfWeek !== 0) {
+                                    
+                                    const anchorDate = new Date(anchorEntry.dateString);
+                                    const currentDate = new Date(dateString);
+
+                                    // 날짜 비교 시 시/분/초를 0으로 통일 (오류 방지)
+                                    anchorDate.setHours(0, 0, 0, 0);
+                                    currentDate.setHours(0, 0, 0, 0);
+
+                                    const msInDay = 24 * 60 * 60 * 1000; // 하루의 밀리초
+                                    const diffInMs = currentDate.getTime() - anchorDate.getTime();
+                                    const diffInDays = Math.round(diffInMs / msInDay); // 기준 날짜와의 일수 차이
+                                    
+                                    // 7로 나눈 몫 (총 몇 주가 지났는지)
+                                    // 0~6일 차이 -> 0 (같은 주)
+                                    // 7~13일 차이 -> 1 (1주 차이)
+                                    const weekDifference = Math.floor(diffInDays / 7);
+
+                                    // 주차 차이가 홀수(1, 3, 5...)이면 근무 교대
+                                    if (weekDifference % 2 === 1) { 
+                                        // 근무 순서 교대: [오후, 오전]
+                                        appliedNames = [anchorEntry.names[1], anchorEntry.names[0]];
+                                    } else { 
+                                        // 0 또는 짝수 주차이면 원래 순서
+                                        appliedNames = anchorEntry.names;
+                                    }
+                                } else {
+                                    // 격주 근무가 아니거나, 일요일인 경우
+                                    appliedNames = anchorEntry.names;
+                                }
+                            }
+                            // [수정 종료] -----------------------------------------------
                         }
                     }
                     cellsContent[colId] = appliedNames;
